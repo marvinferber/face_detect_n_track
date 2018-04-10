@@ -19,14 +19,17 @@
 #include <unistd.h>
 #include <pthread.h>
 
-#include <curses.h>
+//#include <curses.h>
+#include <ros/ros.h>
+#include <image_transport/image_transport.h>
+#include <cv_bridge/cv_bridge.h>
 
 /* Portnummer */
 #define PORT 1233
 
 
 const cv::String    WINDOW_NAME("Camera video");
-const cv::String    CASCADE_FILE("haarcascade_frontalface_default.xml");
+const cv::String    CASCADE_FILE("/home/ferber/maker_ws/src/face_detect_n_track/haarcascade_frontalface_default.xml");
 
 
 static void echo( int );
@@ -41,7 +44,7 @@ static bool transmit(int client_socket, cv::Point point)
     /* Länge der Eingabe */
     sprintf(echo_string, "%i %i\n", point.x, point.y);
     int echo_len = strlen(echo_string);
-    printf("face found %s %i \r\n",echo_string,echo_len);
+    printf("face found %s %i \n",echo_string,echo_len);
     fflush(stdout);
     /* den String inkl. Nullterminator an den Server senden */
     if (send(client_socket, echo_string, echo_len, 0) != echo_len)
@@ -114,8 +117,10 @@ static int client_accept(int sock){
 
 int main(int argc, char** argv)
 {
-	initscr();
-	timeout(0);
+	ros::init(argc, argv, "image_publisher");
+  	ros::NodeHandle nh;
+  	image_transport::ImageTransport it(nh);
+  	image_transport::Publisher pub = it.advertise("camera/image_eyes", 1);
 	// Try opening camera
 	cv::VideoCapture camera(0);
 	//cv::VideoCapture camera("D:\\video.mp4");
@@ -124,7 +129,7 @@ int main(int argc, char** argv)
 		exit(1);
 	}
 
-	cv::namedWindow(WINDOW_NAME, cv::WINDOW_AUTOSIZE);
+	//cv::namedWindow(WINDOW_NAME, cv::WINDOW_KEEPRATIO | cv::WINDOW_AUTOSIZE);
 
 	VideoFaceDetector detector(CASCADE_FILE, camera);
 	cv::Mat frame;
@@ -151,14 +156,17 @@ int main(int argc, char** argv)
 				cv::rectangle(frame, detector.face(), cv::Scalar(255, 0, 0));
                 		cv::Point point = detector.facePosition();
 				cv::circle(frame, point, 30, cv::Scalar(0, 255, 0));
-                		// transmit point to client
-                		if(!transmit(client_sock, point)){
+				//cv::imshow(WINDOW_NAME, frame);
+				sensor_msgs::ImagePtr msg = cv_bridge::CvImage(std_msgs::Header(), "bgr8", frame).toImageMsg();
+				pub.publish(msg);
+                // transmit point to client
+                if(!transmit(client_sock, point)){
 					break;
 				}
 			}
 			
-			//cv::imshow(WINDOW_NAME, frame);
-			if(getch()==27){
+			
+			if(cv::waitKey(25) == 27){
 				running =false;
 				break;
 			}
