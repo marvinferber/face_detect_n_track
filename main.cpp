@@ -19,8 +19,10 @@
 #include <unistd.h>
 #include <pthread.h>
 
+#include <curses.h>
+
 /* Portnummer */
-#define PORT 1234
+#define PORT 1233
 
 
 const cv::String    WINDOW_NAME("Camera video");
@@ -39,7 +41,8 @@ static bool transmit(int client_socket, cv::Point point)
     /* Länge der Eingabe */
     sprintf(echo_string, "%i %i\n", point.x, point.y);
     int echo_len = strlen(echo_string);
-    printf("%s %i \r\n",echo_string,echo_len);
+    printf("face found %s %i \r\n",echo_string,echo_len);
+    fflush(stdout);
     /* den String inkl. Nullterminator an den Server senden */
     if (send(client_socket, echo_string, echo_len, 0) != echo_len)
 		return false;
@@ -111,6 +114,8 @@ static int client_accept(int sock){
 
 int main(int argc, char** argv)
 {
+	initscr();
+	timeout(0);
 	// Try opening camera
 	cv::VideoCapture camera(0);
 	//cv::VideoCapture camera("D:\\video.mp4");
@@ -119,7 +124,7 @@ int main(int argc, char** argv)
 		exit(1);
 	}
 
-	cv::namedWindow(WINDOW_NAME, cv::WINDOW_KEEPRATIO | cv::WINDOW_AUTOSIZE);
+	cv::namedWindow(WINDOW_NAME, cv::WINDOW_AUTOSIZE);
 
 	VideoFaceDetector detector(CASCADE_FILE, camera);
 	cv::Mat frame;
@@ -127,7 +132,8 @@ int main(int argc, char** argv)
     // if all is set up --> open server socket to transmit face position
     int server_sock = server_init();
     // wait for client to connect
-    while (true){
+    bool running =true;
+    while (running){
 	    int client_sock = client_accept(server_sock);
 		while (true)
 		{
@@ -143,16 +149,19 @@ int main(int argc, char** argv)
 			if (detector.isFaceFound())
 			{
 				cv::rectangle(frame, detector.face(), cv::Scalar(255, 0, 0));
-                cv::Point point = detector.facePosition();
+                		cv::Point point = detector.facePosition();
 				cv::circle(frame, point, 30, cv::Scalar(0, 255, 0));
-                // transmit point to client
-                if(!transmit(client_sock, point)){
+                		// transmit point to client
+                		if(!transmit(client_sock, point)){
 					break;
 				}
 			}
 			
-			cv::imshow(WINDOW_NAME, frame);
-			if (cv::waitKey(25) == 27) break;
+			//cv::imshow(WINDOW_NAME, frame);
+			if(getch()==27){
+				running =false;
+				break;
+			}
 		}
         if(close(client_sock) == -1)
             error_exit("Fehler bei close Client");
