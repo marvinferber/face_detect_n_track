@@ -29,7 +29,7 @@
 
 
 const cv::String    WINDOW_NAME("Camera video");
-const cv::String    CASCADE_FILE("/home/ferber/maker_ws/src/face_detect_n_track/haarcascade_frontalface_default.xml");
+const cv::String    CASCADE_FILE("/home/ferber/catkin_ws/src/face_detect_n_track/haarcascade_frontalface_default.xml");
 
 
 static void echo( int );
@@ -44,8 +44,8 @@ static bool transmit(int client_socket, cv::Point point)
     /* Länge der Eingabe */
     sprintf(echo_string, "%i %i\n", point.x, point.y);
     int echo_len = strlen(echo_string);
-    printf("face found %s %i \n",echo_string,echo_len);
-    fflush(stdout);
+    //printf("face found %s %i \n",echo_string,echo_len);
+    //fflush(stdout);
     /* den String inkl. Nullterminator an den Server senden */
     if (send(client_socket, echo_string, echo_len, 0) != echo_len)
 		return false;
@@ -137,10 +137,11 @@ int main(int argc, char** argv)
     // if all is set up --> open server socket to transmit face position
     int server_sock = server_init();
     // wait for client to connect
+    int count = 0;
     bool running =true;
-    while (running){
+    while (ros::ok()){
 	    int client_sock = client_accept(server_sock);
-		while (true)
+		while (ros::ok())
 		{
 			auto start = cv::getCPUTickCount();
 			detector >> frame;
@@ -149,7 +150,7 @@ int main(int argc, char** argv)
 			time_per_frame = (end - start) / cv::getTickFrequency();
 			fps = (15 * fps + (1 / time_per_frame)) / 16;
 
-			printf("Time per frame: %3.3f\tFPS: %3.3f\n", time_per_frame, fps);
+			//printf("Time per frame: %3.3f\tFPS: %3.3f\n", time_per_frame, fps);
 
 			if (detector.isFaceFound())
 			{
@@ -158,7 +159,12 @@ int main(int argc, char** argv)
 				cv::circle(frame, point, 30, cv::Scalar(0, 255, 0));
 				//cv::imshow(WINDOW_NAME, frame);
 				sensor_msgs::ImagePtr msg = cv_bridge::CvImage(std_msgs::Header(), "bgr8", frame).toImageMsg();
-				pub.publish(msg);
+				if(count == 7){
+					pub.publish(msg);
+ 					count =0;
+				}
+				else 
+					count++;
                 // transmit point to client
                 if(!transmit(client_sock, point)){
 					break;
@@ -166,10 +172,10 @@ int main(int argc, char** argv)
 			}
 			
 			
-			if(cv::waitKey(25) == 27){
+		/*	if(cv::waitKey(25) == 27){
 				running =false;
 				break;
-			}
+			}*/
 		}
         if(close(client_sock) == -1)
             error_exit("Fehler bei close Client");
